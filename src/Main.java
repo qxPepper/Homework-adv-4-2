@@ -1,52 +1,88 @@
-public class Main {
-    static int mapSize = 500;                                              //размер мапы
-    static int maxInterval = 1_000;                                        //верхняя граница интервала значений мапы
-    static int[] cycleCount = new int[]{1_000, 1_000_000, 1_000_000};      //количество циклов записи/чтения
-    static int[] countThreads = new int[]{3, 3, 15};                       //количество потоков
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
-    static MapsCompare mapsCompare;
+// Условия задачи были переосмыслены.
+
+public class Main {
+    private static int[] mapSize = {10_000, 1_000_000, 100};
+
+    private static final int MAX_INTERVAL = 1_000;
+    private static final int COUNT_THREADS = 5;
+    private static final int TIME_SLEEP = 1_000;
 
     public static void main(String[] args) throws InterruptedException {
+        Map<Integer, Integer> concurrentHashMap = new ConcurrentHashMap<>(0);
+        Map<Integer, Integer> synchronizedHashMap = Collections.synchronizedMap(new HashMap<>());
+        int[] array;
 
-        for (int i = 0; i < cycleCount.length; i++) {
-            mapsCompare = new MapsCompare(mapSize, maxInterval, cycleCount[i]);
-            generalMeasurements(i);
-            System.out.println("*******************************************");
+        for (int size : mapSize) {
+            array = creatingArray(size);
+
+            MapsCompare mapConcurrent = new MapsCompare(array, concurrentHashMap);
+            MapsCompare mapSynchronized = new MapsCompare(array, synchronizedHashMap);
+
+            System.out.println("Размер числового массива = " + size);
+            System.out.println("...");
+            System.out.println("Время записи ConcurrentHashMap = " +
+                    timeMeasure(mapConcurrent::measureWrite) + " мс.");
+
+            System.out.println("Время записи Collections.synchronizedMap = " +
+                    timeMeasure(mapSynchronized::measureWrite) + " мс.");
+
+            System.out.println("-------------------------------------------");
+
+            System.out.println("Время чтения ConcurrentHashMap = " +
+                    timeMeasure(mapConcurrent::measureRead) + " мс.");
+
+            System.out.println("Время чтения Collections.synchronizedMap = " +
+                    timeMeasure(mapSynchronized::measureRead) + " мс.");
+
+            System.out.println("********************************************");
         }
 
-        System.out.println("Выводы:");
-        System.out.println("При относительно небольших количествах записи/чтения время примерно одинаково.");
-        System.out.println("При существенном увеличении числа записей Synchronized существенно быстрее ConcurrentHashMap.");
-        System.out.println("А вот читает ConcurrentHashMap в примерно в 2 раза быстрее чем Synchronized.");
-        System.out.println("Если увеличить число потоков, то все времена уменьшаются, пропорции при этом сохраняются.");
+        //    Выводы при многократных экспериментах, в среднем:
+        // 1. При малом количестве добавляемых элементов времена записи примерно равны.
+        //    При малом количестве читаемых элементов времена чтения примерно равны.
+        //
+        // 2. При увеличении количества добавляемых элементов на 2 порядка
+        //          время записи ConcurrentHashMap существенно больше Collections.synchronizedMap.
+        //    А вот время чтения ConcurrentHashMap меньше Collections.synchronizedMap.
+        //
+        // 3. При увеличении количества добавляемых элементов ещё на 2 порядка
+        //          тенденции по записи и чтению сохраняются. Разрыв растёт.
     }
 
-    public static void generalMeasurements(int index) throws InterruptedException {
-        float fw1 = timeAction(mapsCompare::measureWriteConcurrent, countThreads[index]);
-        System.out.println("Время записи ConcurrentHashMap = " + fw1);
+    public static int[] creatingArray(int arraySize) {
+        int[] array = new int[arraySize];
 
-        float fw2 = timeAction(mapsCompare::measureWriteSynchronized, countThreads[index]);
-        System.out.println("Время записи Synchronized = " + fw2);
-
-        System.out.println("-------------------------------------------");
-
-        float wr1 = timeAction(mapsCompare::measureReadConcurrent, countThreads[index]);
-        System.out.println("Время чтения ConcurrentHashMap = " + wr1);
-
-        float wr2 = timeAction(mapsCompare::measureReadSynchronized, countThreads[index]);
-        System.out.println("Время чтения Synchronized = " + wr2);
+        for (int i = 0; i < arraySize; i++) {
+            int random = (int) (Math.random() * MAX_INTERVAL);
+            array[i] = random;
+        }
+        return array;
     }
 
-    public static float timeAction(Runnable runnable, int countThreads) throws InterruptedException {
-        float middle = 0;
-        Thread[] threads = new Thread[countThreads];
-        for (int i = 0; i < countThreads; i++) {
+    public static int timeMeasure(Runnable runnable) throws InterruptedException {
+        Thread[] threads = new Thread[COUNT_THREADS];
+        long start = System.currentTimeMillis();
+
+        for (int i = 0; i < COUNT_THREADS; i++) {
             threads[i] = new Thread(runnable);
-
             threads[i].start();
             threads[i].join();
-            middle += mapsCompare.getDuration();
         }
-        return middle / countThreads;
+
+        try {
+            Thread.sleep(TIME_SLEEP);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
+        long finish = System.currentTimeMillis();
+        return (int) (finish - start - TIME_SLEEP);
     }
 }
+
+
