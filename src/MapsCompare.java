@@ -1,8 +1,8 @@
 import java.util.Map;
 
 public class MapsCompare {
-    private final int[] array;
-    private final Map<Integer, Integer> map;
+    private int[] array;
+    private Map<Integer, Integer> map;
 
     public MapsCompare(int[] array, Map<Integer, Integer> map) {
         this.array = array;
@@ -16,8 +16,8 @@ public class MapsCompare {
     }
 
     public void measureRead() {
-        for (int i = 0; i < array.length; i++) {
-            int a = map.get(i);
+        for (int i = 0; i < map.size(); i++) {
+            int temp = map.get(i);
         }
     }
 }
